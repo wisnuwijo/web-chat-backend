@@ -8,5 +8,5 @@ Backend services for web chat app. Built with following technology :
 You can run the app by executing this command :
 #### On MacOS or Linux, run the app with this command :
 ```sh
-DEBUG=myapp:* npm start
+npm start
 ```
