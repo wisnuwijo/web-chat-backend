@@ -1,31 +1,15 @@
 import express from 'express';
-
-const router = express.Router();
-
-const users = [
-    {
-        firstName: "John",
-        lastName: "Doe",
-        age: 25
-    },
-    {
-        firstName: "Jane",
-        lastName: "Doe",
-        age: 24
-    }
-];
+import users from '../app/controller/users.js';
 
 // all routes in here are starting with /users
+const router = express.Router();
 
 router.get('/', (req, res) => {
-    res.send(users);
+    res.send('Welcome!');
 });
 
-router.post('/', (req, res) => {
-    console.log(req.body);
-    console.log('POST ROUTE REACHED');
-
-    res.send(req.body);
-});
+router.post('/register', users.register);
+router.post('/login', users.login);
+router.post('/logout', users.logout);
 
 export default router;
