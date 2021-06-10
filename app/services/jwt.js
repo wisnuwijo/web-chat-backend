@@ -6,8 +6,9 @@ dotenv.config();
 
 function generateAccessToken(payload) {
     return jsonwebtoken.sign({
+        exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7),
         data: payload
-    }, process.env.TOKEN_SECRET, { expiresIn: '7d' });
+    }, process.env.TOKEN_SECRET);
 }
 
 function authenticateToken(req, res, next) {

@@ -4,6 +4,8 @@ import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 import jsonwebtoken from 'jsonwebtoken';
 import jwt from '../services/jwt.js';
+import random from '../services/random.js';
+import validateRequest from '../services/validateRequest.js';
 
 dotenv.config();
 
@@ -11,22 +13,6 @@ dotenv.config();
 const query = util.promisify(connection.query).bind(connection);
 
 var userHelper = {
-    validateRequest: function (req, requiredBodyArr) {
-        for (let i = 0; i < requiredBodyArr.length; i++) {
-            const element = requiredBodyArr[i];
-            if (!req.body.hasOwnProperty(element)) {
-                return {
-                    isValid: false,
-                    requiredField: element
-                };
-            }
-        }
-
-        return {
-            isValid: true,
-            requiredField: ''
-        };
-    },
     isUsernameValid: function (username) {
         var regExOnlyAlphanumeric = /^[a-z0-9]+$/i;
         var isValid = regExOnlyAlphanumeric.test(username);
@@ -95,25 +81,23 @@ var users = {
             message: "Email is taken, please use another"
         });
 
-        bcrypt.hash(password, parseInt(process.env.HASH_SALTROUND), function (err, hashedPassword) {
+        bcrypt.hash(password, parseInt(process.env.HASH_SALTROUND), async function (err, hashedPassword) {
             if (err) throw err;
 
-            connection.query("INSERT INTO `users` (`id`, `username`, `password`, `name`, `email`) VALUES (NULL, ?, ?, ?, ?);", [username, hashedPassword, fullname, email], function (error, results, fields) {
-                if (error) {
-                    return connection.rollback(function () {
-                        throw error;
-                    });
-                };
-
-                res.send({
-                    message: "Success",
-                    token: jwt.generateAccessToken(username)
-                });
+            const pin = random(5);
+            await query("INSERT INTO `users` (`id`, `username`, `pin`, `password`, `name`, `email`) VALUES (NULL, ?, ?, ?, ?, ?);", [username, pin, hashedPassword, fullname, email]);
+            
+            const token = jwt.generateAccessToken(username);
+            await query("UPDATE users SET token = ? WHERE username = ?", [token, username]);
+            
+            res.send({
+                message: "Success",
+                token: token
             });
         });
     },
     login: async function (req, res) {
-        var validateReq = userHelper.validateRequest(req, [
+        var validateReq = validateRequest(req, [
             'username_or_email',
             'password'
         ]);
@@ -129,9 +113,12 @@ var users = {
 
             var userdata = await userHelper.getUserData(determineType.toLowerCase(), usernameOrEmail);
             
-            bcrypt.compare(password, userdata.password, function (err, result) {
+            bcrypt.compare(password, userdata.password, async function (err, result) {
                 if (result) {
-                    const token = jwt.generateAccessToken(userdata.id + Date.now());
+                    const token = jwt.generateAccessToken(userdata.username);
+
+                    await query("UPDATE users SET token = ? WHERE username = ?", [token, userdata.username]);
+
                     return res.send({
                         message: "Success",
                         token: token,
@@ -154,18 +141,18 @@ var users = {
         }
     },
     logout: function (req, res) {
-        var validateReq = userHelper.validateRequest(req, [
+        var validateReq = validateRequest(req, [
             'token'
         ]);
 
         if (validateReq.isValid) {
-            jsonwebtoken.verify(req.body.token, process.env.TOKEN_SECRET, function (err, decoded) {
-                console.log('decoded', decoded);
-                console.log('err', err);
+            jsonwebtoken.verify(req.body.token, process.env.TOKEN_SECRET, async function (err, decoded) {
                 
                 if (decoded) {
                     // refresh token
                     const newToken = jwt.generateAccessToken(decoded.data + Date.now());
+                    await query("UPDATE users SET token = ? WHERE username = ?", [null, decoded.data]);
+                    
                     return res.send({
                         message: "Logout success",
                         token: newToken
@@ -181,6 +168,25 @@ var users = {
                 message: validateReq.requiredField + ' is required'
             });
         }
+    },
+    showPin: async function (req, res) {
+        const senderId = req.user.id;
+        const sqlQuery = `SELECT
+            username,
+            name,
+            pin,
+            email
+        FROM users
+        WHERE id = ?`;
+        
+        const rows = await query(sqlQuery, senderId);
+        
+        var data = {};
+        if (rows.length > 0) data = rows[0];
+
+        return res.send({
+            data: data
+        });
     }
 }
 
