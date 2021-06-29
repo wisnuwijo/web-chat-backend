@@ -55,46 +55,59 @@ var userHelper = {
 
 var users = {
     register: async function (req, res) {
-        const username = req.body.username;
-        const password = req.body.password;
-        const fullname = req.body.name;
-        const email = req.body.email;
+        var validateReq = validateRequest(req, [
+            'username',
+            'password',
+            'name',
+            'email'
+        ]);
 
-        var usernameValid = userHelper.isUsernameValid(username);
-        var usernameUnique = await userHelper.isUsernameUnique(res, username);
-        var emailValid = userHelper.isEmailValid(email);
-        var emailUnique = await userHelper.isEmailUnique(res, email);
+        if (validateReq.isValid) {
+            const username = req.body.username;
+            const password = req.body.password;
+            const fullname = req.body.name;
+            const email = req.body.email;
 
-        if (!emailValid) return res.send({
-            message: "Failed! please enter valid email"
-        });
+            var usernameValid = userHelper.isUsernameValid(username);
+            var usernameUnique = await userHelper.isUsernameUnique(res, username);
+            var emailValid = userHelper.isEmailValid(email);
+            var emailUnique = await userHelper.isEmailUnique(res, email);
 
-        if (!usernameValid) return res.send({
-            message: "Failed! Only alphanumeric characters allowed for username"
-        });
-
-        if (!usernameUnique) return res.send({
-            message: "Username is taken, please use another"
-        });
-
-        if (!emailUnique) return res.send({
-            message: "Email is taken, please use another"
-        });
-
-        bcrypt.hash(password, parseInt(process.env.HASH_SALTROUND), async function (err, hashedPassword) {
-            if (err) throw err;
-
-            const pin = random(5);
-            await query("INSERT INTO `users` (`id`, `username`, `pin`, `password`, `name`, `email`) VALUES (NULL, ?, ?, ?, ?, ?);", [username, pin, hashedPassword, fullname, email]);
-            
-            const token = jwt.generateAccessToken(username);
-            await query("UPDATE users SET token = ? WHERE username = ?", [token, username]);
-            
-            res.send({
-                message: "Success",
-                token: token
+            if (!emailValid) return res.send({
+                message: "Failed! please enter valid email"
             });
-        });
+
+            if (!usernameValid) return res.send({
+                message: "Failed! Only alphanumeric characters allowed for username"
+            });
+
+            if (!usernameUnique) return res.send({
+                message: "Username is taken, please use another"
+            });
+
+            if (!emailUnique) return res.send({
+                message: "Email is taken, please use another"
+            });
+
+            bcrypt.hash(password, parseInt(process.env.HASH_SALTROUND), async function (err, hashedPassword) {
+                if (err) throw err;
+
+                const pin = random(5);
+                await query("INSERT INTO `users` (`id`, `username`, `pin`, `password`, `name`, `email`) VALUES (NULL, ?, ?, ?, ?, ?);", [username, pin, hashedPassword, fullname, email]);
+
+                const token = jwt.generateAccessToken(username);
+                await query("UPDATE users SET token = ? WHERE username = ?", [token, username]);
+
+                res.send({
+                    message: "Success",
+                    token: token
+                });
+            });
+        } else {
+            return res.send({
+                message: validateReq.requiredField + ' is required'
+            });
+        }
     },
     login: async function (req, res) {
         var validateReq = validateRequest(req, [

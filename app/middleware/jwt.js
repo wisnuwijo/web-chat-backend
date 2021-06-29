@@ -13,13 +13,13 @@ async function authenticateToken(req, res, next) {
     if (token == null) return res.sendStatus(401);
 
     jwt.verify(token, process.env.TOKEN_SECRET, async (err, user) => {
+        if (err) return res.sendStatus(403);
+        
         const username = user.data;
         const getUserdata = await query("SELECT * FROM users WHERE username = ? LIMIT 1", [username]);
         if (getUserdata.length > 0) {
             dbToken = getUserdata[0].token;
         }
-
-        if (err) return res.sendStatus(403);
         
         // prevent user from using old token
         if (dbToken != token) return res.sendStatus(403);
