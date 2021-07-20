@@ -136,9 +136,11 @@ var users = {
                         message: "Success",
                         token: token,
                         user: {
+                            id: userdata.id,
                             name: userdata.name,
                             username: userdata.username,
-                            email: userdata.email
+                            email: userdata.email,
+                            pin: userdata.pin
                         }
                     });
                 }

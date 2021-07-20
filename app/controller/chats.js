@@ -9,25 +9,31 @@ var chats = {
         const userId = req.user.id;
 
         const sqlQuery = `SELECT
-            a.id,
+            a.id as chat_rooms_id,
             a.last_chat,
             a.last_chat_timestamp,
-            c.read,
-            c.sender_user_id,
-            e.name as contact_name
+            (SELECT
+                c.id
+            FROM chat_participants b
+            JOIN users c ON b.user_id = c.id
+            WHERE
+                b.chat_rooms_id = a.id AND
+                b.user_id != ?
+            ) as user_id_contact,
+            (SELECT
+                c.name
+            FROM chat_participants b
+            JOIN users c ON b.user_id = c.id
+            WHERE
+                b.chat_rooms_id = a.id AND
+                b.user_id != ?
+            ) as name
         FROM chat_rooms a
-        LEFT JOIN chat_participants b ON a.id = b.chat_rooms_id
-        LEFT JOIN chats c ON a.id = c.chat_rooms_id AND c.id = (
-            SELECT MAX(id)
-            FROM chats d
-            WHERE d.chat_rooms_id = a.id
-        )
-        LEFT JOIN users e ON c.sender_user_id = e.id
-        WHERE b.user_id = ?
-        GROUP BY id
-        ORDER BY a.id  DESC`;
+        WHERE
+            a.id IN (SELECT chat_rooms_id FROM chat_participants WHERE user_id = ?)
+        ORDER BY a.last_chat_timestamp DESC`;
 
-        const rows = await query(sqlQuery, userId);
+        const rows = await query(sqlQuery, [userId, userId, userId]);
         
         return res.send({
             data: rows
@@ -67,7 +73,6 @@ var chats = {
     },
     loadSpecificChat: async function (req, res) {
         const chatRoomId = req.params.chatRoomId;
-        const userId = req.user.id;
 
         const sqlQuery = `SELECT
             a.*,
@@ -81,6 +86,28 @@ var chats = {
         return res.send({
             data: rows
         });
+    },
+    storeChat: async function (chatRoomsId, senderId, message) {
+        const sqlQuery = `INSERT 
+            INTO chats (
+                chat_rooms_id,
+                sender_user_id,
+                message
+            ) VALUES (
+                ?,
+                ?,
+                ?
+            );
+        `;
+
+        const updateChatRoomLastChatQuery = `UPDATE chat_rooms
+            SET last_chat = ?, last_chat_timestamp = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `;
+        await query(updateChatRoomLastChatQuery, [message, chatRoomsId]);
+
+        const rows = await query(sqlQuery, [chatRoomsId, senderId, message]);
+        return rows;
     }
 }
 

@@ -23,8 +23,49 @@ var contacts = {
             `;
 
             const rows = await query(sqlQuery, [senderId, req.body.user_id_contact]);
+
+            // create chat rooms
+            // [1] check if there's chat room exist between users
+            const checkChatRoomQuery = `SELECT chat_rooms_id FROM chat_participants WHERE user_id = ?`;
+            const checkChatParticipantQuery = `SELECT * FROM chat_participants WHERE chat_rooms_id IN (${checkChatRoomQuery}) AND user_id = ?`;
+            const checkChatParticipant = await query(checkChatParticipantQuery, [senderId, req.body.user_id_contact]);
+
+            let chatRoomId = 0;
+            
+            // [2] if there's no chat room yet then create new chat room between user
+            if (checkChatParticipant.length == 0) {
+                const insertChatRoomQuery = `INSERT 
+                    INTO chat_rooms (
+                        created_at
+                    ) VALUES (
+                        current_timestamp()
+                    );
+                `;
+
+                const insertChatParticipantQuery = `INSERT 
+                    INTO chat_participants (
+                        chat_rooms_id,
+                        user_id
+                    ) VALUES (
+                        ?,
+                        ?
+                    );
+                `;
+
+                const insertChatRoom = await query(insertChatRoomQuery);
+                
+                await query(insertChatParticipantQuery, [insertChatRoom.insertId, senderId]);
+                await query(insertChatParticipantQuery, [insertChatRoom.insertId, req.body.user_id_contact]);
+                
+                chatRoomId = insertChatRoom.insertId;
+            } else {
+                chatRoomId = checkChatParticipant[0].chat_rooms_id;
+            }
+
             return res.send({
-                data: rows
+                data: {
+                    chat_rooms_id: chatRoomId
+                }
             });
         } else {
             return res.send({
@@ -45,7 +86,7 @@ var contacts = {
                 a.name,
                 b.id as is_contact
             FROM users a
-            LEFT JOIN contacts b ON a.id = b.user_id
+            LEFT JOIN contacts b ON a.id = b.user_id_contact
             WHERE pin = ?
             `;
 
@@ -63,13 +104,22 @@ var contacts = {
         const senderId = req.user.id;
         const sqlQuery = `SELECT
             a.*,
-            b.name
+            b.name,
+            (
+                SELECT
+                    chat_rooms_id
+                FROM chat_participants
+                WHERE
+                    user_id = ? OR user_id = a.user_id_contact
+                GROUP BY chat_rooms_id
+                HAVING COUNT(chat_rooms_id) > 1
+            ) as chat_rooms_id
         FROM contacts a
         LEFT JOIN users b ON a.user_id_contact = b.id
         WHERE user_id = ?
-        `;
+        ORDER BY a.id DESC`;
 
-        const rows = await query(sqlQuery, senderId);
+        const rows = await query(sqlQuery, [senderId, senderId]);
         return res.send({
             data: rows
         });
