@@ -51,6 +51,6 @@ io.on('connection', (socket) => {
 });
 
 // app.listen(PORT, () => console.log(`>> server running on : http://localhost:${PORT}`))
-server.listen(PORT, () => {
-    console.log(`>> server running on : http://localhost:${PORT}`)
+server.listen(process.env.PORT || PORT, () => {
+    console.log(`>> server running on : http://localhost:${process.env.PORT || PORT}`)
 });
